@@ -1,0 +1,115 @@
+Adhosc
+by Graham Booth July 2011
+
+* Introduction:
+
+- Adhosc is a ruby script which allows musical performers to pass messages to each other during the course of real-time musical performance.
+- The aim of the project is to provide a reliable cross-platform, cross-application infrastructure on which higher level collaborative systems can be built.
+- Examples of such systems include: collaborative interfaces, parameter sharing systems, synchronisation, meta-instruments, etc.
+- Adhosc is primarily designed for use in musical contexts, but can theoretically be used in other contexts where parametric communication is required.
+
+* Getting Started:
+
+The easiest way to get started with Adhosc is to run the ruby script from the command line and to interface with it using the MaxMSP group example provided.
+
+1. Ensure you are connected to a operational network, then run the Adhosc script from the command line, as follows:
+
+$ ruby Adhosc.rb [local-receive-port] [local-send-port]
+
+2. Load the MaxMSP example (MaxMSP-example-group.maxpat). The rest of the MaxMSP test patch should be self-explanatory. 
+
+Note that currently testing has only been done between PCs running Mac OSX. Windows and Linux testing to follow...
+
+* Dependencies
+
+- adhosc.rb requires the following libraries:
+
+dnssd 			(for automatic network service discovery) 		http://dnssd.rubyforge.org/DNSSD.html
+osc-ruby 		(for communication via Open Sound Control)		http://opensoundcontrol.org/implementation/osc-ruby
+eventmachine 		(to run the osc-ruby event machine server)		http://rubyeventmachine.com/
+
+All are available as gems, and can be installed as follows (assuming Rubygems is installed):
+
+$ gem install --remote [name-of-gem]
+
+- the Max/MSP examples require the osc-route object (http://cnmat.berkeley.edu/downloads)
+
+* Projects Aims:
+
+a. cross-platform operation (designed to work on Mac OS, Linux and Windows). +
+b. cross-application operation (different players may connect to using any application capable of sending Open Sound Control messages).
+c. reliability and robustness (players may join and leave the network as they wish).
+d. simulation (multiple version of Adhosc may be run on a single PC, aid prototyping and troubleshooting of complex multi-player systems).
+
++ not yet tested
+
+* Operational Details:
+
+- Adhosc acts as a communications hub which dynamically detects the players on the local network and enables messages to be routed between them.
+- Operation is in two stages: a) service registration and discovery and b) message forwarding, with the latter being built on the former.
+
+a) Service Registration and Discovery
+
+This section is built on the aforementioned dnssd library, which enables automatic dynamic service discovery (AKA zeroconf, bonjour) and eliminates the need to know the individual IP addresses of peers prior to connection. In addition, peers can be referred to by a human readable name (e.g. "Dave.osc.udp" and "DaveMacbook.local") rather than by IP address (168.20.2.1).
+
+Adhosc undertakes service registration and discovery as follows:
+
+i. registers a service of the type "_osc._udp", using a name specified by the user (/connect).
+ii. continually browses for "_osc._udp" services on the network (including self).
+ii. found services are added to a registration table, of the form [service index, service name, local name, port] e.g. 
+
+	0, DavesService._osc._udp, DaveMacbook.local, 12345
+	1, BobsService._osc._udp, BobNetbook.local, 8001
+	2, AmysService._osc._udp, AmyPC.local, 10102
+
+In contrast to the static service name, the numeric index may change when new players register or leave. This index always represents the position of the player with in the registration table.
+
+b) Message Forwarding
+
+Once a player has successfully registered, additional communications channels are opened up so as to allow Adhosc to communicate with the peers currently registered on the network. One channel receives message from the local client application and route them across the network to peers, while the other receives message from peers and routes them to the local client application. The messages are passed via the a human-readable, URL-style Open Sound Control protocol.
+
+* Open Sound Control API
+
+Adhosc responds to a basic set of OSC commands and returns others which provide information about the state of the network. In addition, the /forward namespace is used for message routing. The full list is as follows:
+
+i. Local Registration
+
+- the following namespaces are related to registration of the local peer on the network
+
+/adhosc/local/send/connect			[service-name] [local-send-port] [local-receive-port]	(initiates a connection with the Adhosc script, activating the registration process)
+/adhosc/local/send/disconnect										(tells the script to deregister the local player (no arguments required))
+/adhosc/local/receive/connected			[boolean]						(returns the connection state: 0 represents disconnected, 1 represents connected)
+
+ii. Remote Registration
+
+- the following namespaces are returned when a peer joins or leaves the network
+
+/adhosc/local/receive/mypeer			[numeric index] [service name]				(returns the index and service name of the local peer)
+/adhosc/local/receive/numpeers			[integer]						(returns the amount of players currently registered)
+/adhosc/local/receive/listpeers 		[numeric index] [service name] 				(returns the indices and service names of all players on the network (in pairs))
+/adhosc/local/receive/leavingpeer		[numeric index] [service name]				(returns the index and service name of the most recent peer to leave (on leave only))
+/adhosc/local/receive/joiningpeer		[numeric index] [service name]				(returns the index and service name of the most recent peer to leave (on join only))
+
+iii. Forwarding:
+
+- the following namespaces are 
+
+/adhosc/local/send/forward			[target-peer] [namespace] [data-1] [data-2] [etc]	(forwards to a single named peer (index or service named may be used))
+/adhosc/local/send/forward/all			[namespace] [data] [namespace] [data-1] [data-2] [etc]	(automatically forwards to all peers on the network, including self)
+/adhosc/local/send/forward/remote		[namespace] [data] [namespace] [data-1] [data-2] [etc]	(automatically forwards to all peers on the network, exluding self)
+/adhosc/local/receive/forward			[sending-peer-index] [sending-peer-service-name]	(messages received from other peers, prepended by the index and name of the peer who sent them)
+						[namespace]  [data-1] [data-2] [etc]					
+
+* Future Work
+
+Aims for future versions include:
+
+- cross-platform testing
+- example patches for the PureData and Supercollider environments
+- time-tagged messages and scheduled OSC bundles, allowing for tight synchronisation between group members
+- implementation as a simple application, including a GUI which shows the connection state of the player and the overall state of the network
+- a set of useful musical examples demonstrating the potential of the system
+- documentation in RDoc format
+- mac address based naming, to avoid clashes
+- automatic discovery of local client applications
+- better solution to running multiple local clients (current relies on random port allocation)
